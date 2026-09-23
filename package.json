@@ -1,0 +1,35 @@
+{
+  "name": "tallynest",
+  "version": "0.0.0",
+  "private": true,
+  "description": "TallyNest MVP workspace",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.14.0 <25",
+    "pnpm": ">=11.19.0 <12"
+  },
+  "scripts": {
+    "build": "pnpm --filter @tallynest/backend build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm secrets:scan",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "secrets:scan": "secretlint \"**/*\"",
+    "test": "pnpm --filter @tallynest/backend test",
+    "typecheck": "pnpm --filter @tallynest/backend typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@secretlint/secretlint-rule-preset-recommend": "13.0.5",
+    "@types/aws-lambda": "8.10.163",
+    "@types/node": "26.6.2",
+    "eslint": "9.39.5",
+    "esbuild": "0.28.2",
+    "globals": "17.12.0",
+    "prettier": "3.9.9",
+    "secretlint": "13.0.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.1"
+  }
+}
