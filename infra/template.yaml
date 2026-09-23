@@ -424,7 +424,7 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: ApiFunctionLogGroup
     Properties:
-      CodeUri: apps/backend/dist/
+      CodeUri: ../apps/backend/dist
       Events:
         ApiRoutes:
           Type: HttpApi
@@ -444,7 +444,7 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: AiRequestFunctionLogGroup
     Properties:
-      CodeUri: apps/backend/dist/
+      CodeUri: ../apps/backend/dist
       Environment:
         Variables:
           AI_QUEUE_URL: !Ref AiQueue
@@ -474,7 +474,7 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: AiWorkerFunctionLogGroup
     Properties:
-      CodeUri: apps/backend/dist/
+      CodeUri: ../apps/backend/dist
       Events:
         AiQueueMessages:
           Type: SQS
@@ -497,7 +497,7 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: CleanupFunctionLogGroup
     Properties:
-      CodeUri: apps/backend/dist/
+      CodeUri: ../apps/backend/dist
       Environment:
         Variables:
           AI_QUEUE_URL: !Ref AiQueue
