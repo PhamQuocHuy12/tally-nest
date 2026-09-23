@@ -14,6 +14,8 @@ This folder is the working source of truth for planning the first release.
   AWS implementation contracts for review.
 - [Backend backlog](backlog/README.md) — ordered backend and AWS Console tickets with dependencies
   and acceptance evidence.
+- [Two-PC AWS SAM local runbook](sam-two-pc-local-runbook.md) — install, run, test, troubleshoot,
+  and safely clean up a LAN-based SAM host.
 - [Product engineering progress](../product-engineering-progress.md) — current lifecycle phase and
   evidence.
 

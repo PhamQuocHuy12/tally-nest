@@ -8,7 +8,7 @@ credentials, account identifiers, or secret values into the repository or chat e
 
 **Owner:** User  
 **Dependencies:** None  
-**Status:** pending
+**Status:** in_progress
 
 ### Goal
 

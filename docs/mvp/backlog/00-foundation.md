@@ -63,7 +63,7 @@ account.
 
 **Owner:** Codex  
 **Dependencies:** BE-002  
-**Status:** pending
+**Status:** completed
 
 ### Goal
 
@@ -86,3 +86,9 @@ deployed.
 - A build succeeds without deploying.
 - A change-set preview can be generated once AWS-002 is complete.
 - Review confirms that the template contains no secret values.
+
+Completed on 2026-09-23. The user confirmed that local SAM validation passed and that the built
+stack started successfully on the SAM host. A caller on the trusted LAN reached the API route and
+received the expected scaffold response, `{"code":"NOT_IMPLEMENTED"}`. Repository secret scanning
+also passed. The change-set preview remains intentionally deferred until AWS-002 is complete and
+does not authorize deployment.

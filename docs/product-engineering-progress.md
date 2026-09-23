@@ -7,8 +7,8 @@ deployment.
 
 ## Scope boundary
 
-Included now: approved product/design documentation, the ordered backlog, and the local TypeScript
-backend workspace foundation.
+Included now: approved product/design documentation, the ordered backlog, the local TypeScript
+backend workspace foundation, and the locally validated AWS SAM development stack.
 
 Not authorized now: AWS account/provider configuration, cloud resource creation, deployment, or
 release. Later implementation tickets require their own authorization.
@@ -23,25 +23,27 @@ release. Later implementation tickets require their own authorization.
 | Technical design    | completed   | T1–T7 and the documented contracts, data model, failure behavior, security, operations, and cost controls approved |
 | Design review       | completed   | Backend design and tooling closure confirmed through completed BE-001 on 2026-09-22                                |
 | Implementation plan | completed   | Ordered backend/AWS tickets define dependencies, validation, ownership, and deployment gates                       |
-| Implementation      | in_progress | BE-002 workspace scaffold completed locally; BE-003 is the next pending slice                                      |
+| Implementation      | in_progress | BE-002 and BE-003 completed locally; AWS-001 account security and cost guardrails are now active                   |
 | Code review onward  | pending     | Requires implementation evidence from later feature slices                                                         |
 
 ## Active work
 
-| Work item                                                                | Owner                                        | Status    | Evidence / next action                                                                                                                       |
-| ------------------------------------------------------------------------ | -------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Confirm ownership model for a private MVP that may later support couples | Product                                      | completed | Private one-member personal ledger approved; future sharing uses a separate shared ledger by default                                         |
-| Confirm MVP client and reminder scope                                    | Product / React Native                       | completed | Android React Native only; iOS and web later; optional local Android notification; no email or remote push                                   |
-| Select infrastructure definition tool                                    | Product engineering                          | completed | AWS SAM with TypeScript Lambda handlers approved for the MVP                                                                                 |
-| Select AWS region                                                        | Product engineering                          | completed | Singapore (`ap-southeast-1`) approved for all regional MVP resources                                                                         |
-| Set application-wide AI allowance                                        | Product / backend                            | completed | Configurable USD $1.00 per calendar month plus separate 100-call per-user limit                                                              |
-| Confirm product name                                                     | Product                                      | completed | TallyNest approved; availability checks remain a pre-release task                                                                            |
-| Produce high-level and technical design                                  | Product engineering / backend / React Native | completed | Draft created at `docs/mvp/technical-design.md`                                                                                              |
-| Review technical design decisions T1–T7                                  | Product / engineering                        | completed | All seven technical decisions approved on 2026-09-20                                                                                         |
-| Perform design challenge                                                 | Product engineering / backend / React Native | completed | Deferred DynamoDB review and backend design/tooling closure completed through BE-001; user confirmed completion on 2026-09-22                |
-| Create ordered backend implementation backlog                            | Product engineering / backend                | completed | `docs/mvp/backlog/README.md` and its grouped tickets created on 2026-09-22; hybrid SAM plus user-operated AWS Console prerequisites approved |
-| Close backend design and tooling decisions (BE-001)                      | Product engineering / backend                | completed | User confirmed completion on 2026-09-22; ticket and backlog index synchronized                                                               |
-| Scaffold the TypeScript backend workspace (BE-002)                       | Product engineering / backend                | completed | Clean frozen-lockfile install and `pnpm check` passed on 2026-09-23; no AWS account or deployment used                                       |
+| Work item                                                                | Owner                                        | Status      | Evidence / next action                                                                                                                       |
+| ------------------------------------------------------------------------ | -------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Confirm ownership model for a private MVP that may later support couples | Product                                      | completed   | Private one-member personal ledger approved; future sharing uses a separate shared ledger by default                                         |
+| Confirm MVP client and reminder scope                                    | Product / React Native                       | completed   | Android React Native only; iOS and web later; optional local Android notification; no email or remote push                                   |
+| Select infrastructure definition tool                                    | Product engineering                          | completed   | AWS SAM with TypeScript Lambda handlers approved for the MVP                                                                                 |
+| Select AWS region                                                        | Product engineering                          | completed   | Singapore (`ap-southeast-1`) approved for all regional MVP resources                                                                         |
+| Set application-wide AI allowance                                        | Product / backend                            | completed   | Configurable USD $1.00 per calendar month plus separate 100-call per-user limit                                                              |
+| Confirm product name                                                     | Product                                      | completed   | TallyNest approved; availability checks remain a pre-release task                                                                            |
+| Produce high-level and technical design                                  | Product engineering / backend / React Native | completed   | Draft created at `docs/mvp/technical-design.md`                                                                                              |
+| Review technical design decisions T1–T7                                  | Product / engineering                        | completed   | All seven technical decisions approved on 2026-09-20                                                                                         |
+| Perform design challenge                                                 | Product engineering / backend / React Native | completed   | Deferred DynamoDB review and backend design/tooling closure completed through BE-001; user confirmed completion on 2026-09-22                |
+| Create ordered backend implementation backlog                            | Product engineering / backend                | completed   | `docs/mvp/backlog/README.md` and its grouped tickets created on 2026-09-22; hybrid SAM plus user-operated AWS Console prerequisites approved |
+| Close backend design and tooling decisions (BE-001)                      | Product engineering / backend                | completed   | User confirmed completion on 2026-09-22; ticket and backlog index synchronized                                                               |
+| Scaffold the TypeScript backend workspace (BE-002)                       | Product engineering / backend                | completed   | Clean frozen-lockfile install and `pnpm check` passed on 2026-09-23; no AWS account or deployment used                                       |
+| Add and validate the SAM development stack (BE-003)                      | Product engineering / backend                | completed   | User confirmed local SAM validation, build, startup, and trusted-LAN API invocation on 2026-09-23; expected scaffold `501` response received |
+| Secure the AWS account and add cost guardrails (AWS-001)                 | User / product engineering                   | in_progress | Confirm root MFA and recovery controls, test budget notifications, confirm Singapore, and record current cost eligibility                    |
 
 ## Reconciled evidence
 
@@ -95,6 +97,11 @@ release. Later implementation tickets require their own authorization.
 - 2026-09-23: A clean `pnpm install --frozen-lockfile --offline` succeeded, followed by a passing
   `pnpm check` (format, lint, typecheck, 3 unit tests, 3 Lambda bundles, and secret scan).
 - 2026-09-23: `pnpm audit --prod` reported no known vulnerabilities in production dependencies.
+- 2026-09-23: BE-003 was completed. The user confirmed that SAM validation passed locally and the
+  built development stack started without deployment. A trusted-LAN caller reached the API handler
+  and received the expected `501` scaffold response. Secret scanning passed; the change-set preview
+  remains deferred until AWS-002 is complete.
+- 2026-09-23: The user selected AWS-001 as the next active ticket before BE-004.
 
 ## Key risks
 
@@ -116,6 +123,6 @@ release. Later implementation tickets require their own authorization.
 
 ## Next action
 
-Review and authorize `BE-003` in `docs/mvp/backlog/00-foundation.md` when ready: define and validate
-the local AWS SAM development stack without deploying it. `AWS-001` remains a separate user-owned
-prerequisite that can proceed independently.
+Complete AWS-001 in `docs/mvp/backlog/01-aws-console.md`: confirm root MFA and recovery controls,
+create and test budget notifications, confirm Singapore (`ap-southeast-1`), and record current Free
+Tier or credit eligibility. No application deployment is authorized.
