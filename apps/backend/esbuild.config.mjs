@@ -4,6 +4,7 @@ await build({
   bundle: true,
   entryPoints: {
     api: 'src/handlers/api/index.ts',
+    'ai-request': 'src/handlers/ai-request/index.ts',
     'ai-worker': 'src/handlers/ai-worker/index.ts',
     cleanup: 'src/handlers/cleanup/index.ts',
   },

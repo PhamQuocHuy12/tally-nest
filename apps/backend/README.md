@@ -1,8 +1,8 @@
 # TallyNest backend
 
-This package is the TypeScript modular monolith for the TallyNest Lambda backend. It builds three
-fail-closed placeholder entry points: HTTP API, AI worker, and scheduled cleanup. Their business
-behavior is added by later backlog tickets.
+This package is the TypeScript modular monolith for the TallyNest Lambda backend. It builds four
+fail-closed placeholder entry points: HTTP API, AI request acceptance, AI worker, and scheduled
+cleanup. Their business behavior is added by later backlog tickets.
 
 ## Boundaries
 
@@ -21,3 +21,6 @@ domain code does not depend on AWS, Lambda, transport, or provider libraries.
 
 Copy `.env.example` only when a local tool needs an environment file. Do not put credentials or
 provider keys in committed files. Configuration is validated with Zod through `loadConfig`.
+
+AWS resource names are injected by the SAM stack. No provider secret is part of the template; the AI
+worker receives secret access only after the separate AWS-003 configuration ticket is approved.

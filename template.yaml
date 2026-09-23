@@ -1,0 +1,540 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: TallyNest development serverless stack
+
+Parameters:
+  Environment:
+    Type: String
+    Default: development
+    AllowedValues:
+      - development
+  CognitoCallbackUrl:
+    Type: String
+    Default: tallynest://auth/callback
+    AllowedPattern: '^tallynest://auth/callback$'
+  CognitoLogoutUrl:
+    Type: String
+    Default: tallynest://auth/signout
+    AllowedPattern: '^tallynest://auth/signout$'
+  EnablePointInTimeRecovery:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  PointInTimeRecoveryEnabled: !Equals [!Ref EnablePointInTimeRecovery, 'true']
+
+Globals:
+  Function:
+    Architectures:
+      - arm64
+    Environment:
+      Variables:
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+        LOG_LEVEL: info
+        TALLYNEST_ENV: !Ref Environment
+        TABLE_NAME: !Ref ApplicationTable
+        RECEIPT_BUCKET_NAME: !Ref ReceiptBucket
+    Runtime: nodejs24.x
+    Tracing: PassThrough
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AutoVerifiedAttributes:
+        - email
+      DeletionProtection: INACTIVE
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+      MfaConfiguration: 'OFF'
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 7
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate:
+          - email
+      UserPoolName: !Sub '${AWS::StackName}-users'
+      UserPoolTier: ESSENTIALS
+      UsernameAttributes:
+        - email
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      AccessTokenValidity: 60
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AuthSessionValidity: 3
+      CallbackURLs:
+        - !Ref CognitoCallbackUrl
+      ClientName: !Sub '${AWS::StackName}-android'
+      EnableTokenRevocation: true
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_AUTH
+      GenerateSecret: false
+      IdTokenValidity: 60
+      LogoutURLs:
+        - !Ref CognitoLogoutUrl
+      PreventUserExistenceErrors: ENABLED
+      RefreshTokenValidity: 30
+      SupportedIdentityProviders:
+        - COGNITO
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      UserPoolId: !Ref UserPool
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub 'tallynest-development-${AWS::AccountId}'
+      ManagedLoginVersion: 2
+      UserPoolId: !Ref UserPool
+
+  ManagedLoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: UserPoolDomain
+    Properties:
+      ClientId: !Ref UserPoolClient
+      UseCognitoProvidedValues: true
+      UserPoolId: !Ref UserPool
+
+  HttpApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}'
+      RetentionInDays: 14
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      AccessLogSettings:
+        DestinationArn: !GetAtt HttpApiAccessLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationError":"$context.integrationErrorMessage"}
+      Auth:
+        Authorizers:
+          CognitoJwtAuthorizer:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              audience:
+                - !Ref UserPoolClient
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${UserPool}'
+        DefaultAuthorizer: CognitoJwtAuthorizer
+      DefaultRouteSettings:
+        DetailedMetricsEnabled: false
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+      FailOnWarnings: true
+      StageName: !Ref Environment
+      Tags:
+        Environment: !Ref Environment
+        Project: TallyNest
+
+  ApplicationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [PointInTimeRecoveryEnabled, true, false]
+      SSESpecification:
+        SSEEnabled: true
+      TableName: !Sub '${AWS::StackName}-data'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: TallyNest
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  ReceiptBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+            Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: TallyNest
+
+  ReceiptBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ReceiptBucket
+      PolicyDocument:
+        Statement:
+          - Action: s3:*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+            Effect: Deny
+            Principal: '*'
+            Resource:
+              - !GetAtt ReceiptBucket.Arn
+              - !Sub '${ReceiptBucket.Arn}/*'
+            Sid: DenyInsecureTransport
+        Version: '2012-10-17'
+
+  AiDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      QueueName: !Sub '${AWS::StackName}-ai-dlq'
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: TallyNest
+
+  AiQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 345600
+      QueueName: !Sub '${AWS::StackName}-ai'
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt AiDeadLetterQueue.Arn
+        maxReceiveCount: 3
+      ReceiveMessageWaitTimeSeconds: 20
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: TallyNest
+      VisibilityTimeout: 180
+
+  ApiFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-api'
+      RetentionInDays: 14
+
+  AiRequestFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ai-request'
+      RetentionInDays: 14
+
+  AiWorkerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ai-worker'
+      RetentionInDays: 14
+
+  CleanupFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-cleanup'
+      RetentionInDays: 14
+
+  ApiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: &LambdaAssumeRolePolicy
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: !Sub '${ApiFunctionLogGroup.Arn}:*'
+              - Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:TransactGetItems
+                  - dynamodb:TransactWriteItems
+                  - dynamodb:UpdateItem
+                Effect: Allow
+                Resource:
+                  - !GetAtt ApplicationTable.Arn
+                  - !Sub '${ApplicationTable.Arn}/index/*'
+              - Action:
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:PutObject
+                Effect: Allow
+                Resource: !Sub '${ReceiptBucket.Arn}/receipts/*'
+            Version: '2012-10-17'
+          PolicyName: ApiFunctionAccess
+
+  AiRequestFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: *LambdaAssumeRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: !Sub '${AiRequestFunctionLogGroup.Arn}:*'
+              - Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:TransactWriteItems
+                  - dynamodb:UpdateItem
+                Effect: Allow
+                Resource:
+                  - !GetAtt ApplicationTable.Arn
+                  - !Sub '${ApplicationTable.Arn}/index/*'
+              - Action: sqs:SendMessage
+                Effect: Allow
+                Resource: !GetAtt AiQueue.Arn
+            Version: '2012-10-17'
+          PolicyName: AiRequestFunctionAccess
+
+  AiWorkerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: *LambdaAssumeRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: !Sub '${AiWorkerFunctionLogGroup.Arn}:*'
+              - Action:
+                  - dynamodb:GetItem
+                  - dynamodb:TransactWriteItems
+                  - dynamodb:UpdateItem
+                Effect: Allow
+                Resource: !GetAtt ApplicationTable.Arn
+              - Action: s3:GetObject
+                Effect: Allow
+                Resource: !Sub '${ReceiptBucket.Arn}/receipts/*'
+              - Action:
+                  - sqs:ChangeMessageVisibility
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:ReceiveMessage
+                Effect: Allow
+                Resource: !GetAtt AiQueue.Arn
+            Version: '2012-10-17'
+          PolicyName: AiWorkerFunctionAccess
+
+  CleanupFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: *LambdaAssumeRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: !Sub '${CleanupFunctionLogGroup.Arn}:*'
+              - Action:
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Effect: Allow
+                Resource:
+                  - !GetAtt ApplicationTable.Arn
+                  - !Sub '${ApplicationTable.Arn}/index/*'
+              - Action: s3:DeleteObject
+                Effect: Allow
+                Resource: !Sub '${ReceiptBucket.Arn}/receipts/*'
+              - Action: sqs:SendMessage
+                Effect: Allow
+                Resource: !GetAtt AiQueue.Arn
+            Version: '2012-10-17'
+          PolicyName: CleanupFunctionAccess
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ApiFunctionLogGroup
+    Properties:
+      CodeUri: apps/backend/dist/
+      Events:
+        ApiRoutes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: ANY
+            Path: /v1/{proxy+}
+            PayloadFormatVersion: '2.0'
+      FunctionName: !Sub '${AWS::StackName}-api'
+      Handler: api.handler
+      MemorySize: 256
+      ReservedConcurrentExecutions: 5
+      Role: !GetAtt ApiFunctionRole.Arn
+      Timeout: 15
+
+  AiRequestFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: AiRequestFunctionLogGroup
+    Properties:
+      CodeUri: apps/backend/dist/
+      Environment:
+        Variables:
+          AI_QUEUE_URL: !Ref AiQueue
+      Events:
+        QuickEntry:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /v1/ai/quick-entry
+            PayloadFormatVersion: '2.0'
+        ReceiptDraft:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /v1/ai/receipt-drafts
+            PayloadFormatVersion: '2.0'
+      FunctionName: !Sub '${AWS::StackName}-ai-request'
+      Handler: ai-request.handler
+      MemorySize: 256
+      ReservedConcurrentExecutions: 2
+      Role: !GetAtt AiRequestFunctionRole.Arn
+      Timeout: 15
+
+  AiWorkerFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: AiWorkerFunctionLogGroup
+    Properties:
+      CodeUri: apps/backend/dist/
+      Events:
+        AiQueueMessages:
+          Type: SQS
+          Properties:
+            BatchSize: 1
+            Enabled: true
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+            Queue: !GetAtt AiQueue.Arn
+            ScalingConfig:
+              MaximumConcurrency: 2
+      FunctionName: !Sub '${AWS::StackName}-ai-worker'
+      Handler: ai-worker.handler
+      MemorySize: 1024
+      ReservedConcurrentExecutions: 2
+      Role: !GetAtt AiWorkerFunctionRole.Arn
+      Timeout: 60
+
+  CleanupFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: CleanupFunctionLogGroup
+    Properties:
+      CodeUri: apps/backend/dist/
+      Environment:
+        Variables:
+          AI_QUEUE_URL: !Ref AiQueue
+      Events:
+        CleanupSchedule:
+          Type: Schedule
+          Properties:
+            Description: Reconcile abandoned receipts and accepted AI work
+            Enabled: true
+            Name: !Sub '${AWS::StackName}-cleanup'
+            RetryPolicy:
+              MaximumEventAgeInSeconds: 3600
+              MaximumRetryAttempts: 2
+            Schedule: rate(15 minutes)
+      FunctionName: !Sub '${AWS::StackName}-cleanup'
+      Handler: cleanup.handler
+      MemorySize: 256
+      ReservedConcurrentExecutions: 1
+      Role: !GetAtt CleanupFunctionRole.Arn
+      Timeout: 30
+
+Outputs:
+  ApiUrl:
+    Description: Development HTTP API base URL
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Environment}'
+  AwsRegion:
+    Description: Region used by the Android client
+    Value: !Ref AWS::Region
+  CognitoDomain:
+    Description: Cognito managed login domain
+    Value: !Sub 'https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com'
+  CognitoUserPoolClientId:
+    Description: Public Android OAuth client identifier
+    Value: !Ref UserPoolClient
+  CognitoUserPoolId:
+    Description: Cognito user pool identifier
+    Value: !Ref UserPool
+  ReceiptBucketName:
+    Description: Private receipt upload bucket name for deployment checks
+    Value: !Ref ReceiptBucket
